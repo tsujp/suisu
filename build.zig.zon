@@ -1,0 +1,12 @@
+.{
+    // TODO: Better name as and when appropriate also see build.zig same TODO.
+    .name = "rest_wrapper",
+    .version = "0.1.0",
+
+    .dependencies = .{
+        .httpz = .{
+            .url = "https://github.com/karlseguin/http.zig/archive/3b15f2034f7b412b168c7d623bcd1a11d95ee6c6.tar.gz",
+            .hash = "12204d254505fd33404d95da79024bcac378bfd558987a8f04bd2920af53e7aed768",
+        },
+    },
+}
