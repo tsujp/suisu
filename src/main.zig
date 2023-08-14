@@ -15,6 +15,29 @@ pub fn main() !void {
     try stdout.print("Run `zig build test` to run the tests.\n", .{});
 
     try bw.flush(); // don't forget to flush!
+
+    // ------ REST
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    var server = try httpz.Server().init(allocator, .{ .port = 5882 });
+    server.notFound(notFound);
+
+    var router = server.router();
+    router.get("/api/user/:id", getUser);
+
+    try server.listen();
+}
+
+fn getUser(req: *httpz.Request, res: *httpz.Response) !void {
+    // Status code 200 is implicit.
+
+    try res.json(.{ .id = req.param("id").?, .name = "Ted" }, .{});
+}
+
+fn notFound(_: *httpz.Request, res: *httpz.Response) !void {
+    res.status = 404;
+    res.body = "Not found";
 }
 
 test "simple test" {
