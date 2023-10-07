@@ -1,7 +1,7 @@
 import { Router } from '@stricjs/router'
 import { ApiType } from './u256.ts'
 import { Type } from '@sinclair/typebox'
-import { TypedRouter } from './typed_router.ts'
+import { TypedRouter } from './typed_router_v2.ts'
 
 // TODO: Make these both just one call.
 const base = new Router()
@@ -21,16 +21,14 @@ const jsonHeader = {
   headers: { 'Content-Type': 'application/json' }
 }
 
-// app.post('/foo/bar')
-// app.get('/foo/bar')
-app.specialRoute(
+app.get(
   '/foo/:id',
   {
     id: Type.Integer(),
   },
   (ctx, ser) => {
     // At this point `params.id` is guaranteed to be an integer.
-    console.log('route callback invokved')
+    return new Response('why howdy there')
   }
 )
 
