@@ -1,12 +1,17 @@
-import { Static, Kind, TSchema, TypeRegistry, FormatRegistry, ValueGuard, SchemaOptions, TypeBoxError, TKind } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
-import { DefaultErrorFunction, TypeSystem, TypeSystemErrorFunction } from '@sinclair/typebox/system'
-import { maxU256 } from './macro.ts' with { type: 'macro' };
-import { TypeCompiler } from '@sinclair/typebox/compiler'
+// import { Static, Kind, TSchema, TypeRegistry, FormatRegistry, ValueGuard, SchemaOptions, TypeBoxError, TKind } from '@sinclair/typebox'
+import { TypeSystemErrorFunction, DefaultErrorFunction, TypeRegistry, Kind, TypeBoxError, TSchema, Static, TypeCompiler } from 'elysia'
+// import { Value } from '@sinclair/typebox/value'
+// import { DefaultErrorFunction, TypeSystemErrorFunction } from '@sinclair/typebox/system'
+// import { maxU256 } from './macro.ts' with { type: 'macro' };
+// import { TypeCompiler } from '@sinclair/typebox/compiler'
+
+// TODO: As a macro?
+// const MAX_U256 = BigInt(2 * 256)
 
 export interface Metadata {
 	[name: string]: any
 }
+
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 // * * * * * * * * * * * Type schemas (abstract definitions).
@@ -36,7 +41,7 @@ export class ValueCheckError extends TypeBoxError {
 export namespace ValueCheck {
 	// - - - U256
 	export function U256(schema: TU256, value: unknown): boolean {
-		return InBigIntRange(value, 0n, maxU256())
+		return InBigIntRange(value, 0n, BigInt(2 ** 256))
 	}
 	// - - - 
 	function Visit(schema: TSchema, value: unknown): boolean {
@@ -56,7 +61,7 @@ export namespace ValueCheck {
 
 export namespace TypeGuard {
 	// - - -
-	function IsObject(value: unknown): value is Record<typeof any, unknown> {
+	function IsObject(value: unknown): value is Record<any, unknown> {
 		return typeof value === 'object'
 	}
 	// - - - U256 (Type)
@@ -84,7 +89,7 @@ TypeRegistry.Set<TU256>('API:U256', (schema, value) => ValueCheck.Check(schema, 
 
 TypeSystemErrorFunction.Set((schema, type) => {
 	switch(schema[Kind]) {
-		case 'API:U256': return 'Expected 256-bit unsigned integer'
+		case 'API:U256': return 'Expected bing bong baz'
 	}
 
 	return DefaultErrorFunction(schema, type)
@@ -102,13 +107,20 @@ export class TypeDefBuilder {
   public Strict<T extends TSchema>(schema: T): T {
     return JSON.parse(JSON.stringify(schema)) as T
   }
-	/** [Standard] Creates an unsigned 256-bit integer type */
+	/** [Standard] Creates a Float64 type */
   public U256(metadata: Metadata = {}): TU256 {
-    return this.Create({  [Kind]: 'API:U256', type: 'integer' }, metadata)
+    return this.Create({  [Kind]: 'API:U256', type: 'integer', default: 0 }, metadata)
   }
 }
 
 export const ApiType = new TypeDefBuilder()
+
+console.log('compile the type')
+console.log(TypeCompiler.Compile(ApiType.U256()))
+console.log('worked?????')
+
+// Unsafe<string>({ type: 'number' })
+
 
 // Custom type system for non-standard JSON Schema types. The main purpose is to
 //   have compile and runtime validation on the server while encoding to a

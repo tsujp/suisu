@@ -1,0 +1,36 @@
+const std = @import("std");
+
+pub fn main() !void {
+    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
+    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+
+    // stdout is for the actual output of your application, for example if you
+    // are implementing gzip, then only the compressed bytes should be sent to
+    // stdout, not any debugging messages.
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+
+    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+
+    try bw.flush(); // don't forget to flush!
+}
+
+test "simple test" {
+    var list = std.ArrayList(i32).init(std.testing.allocator);
+    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
+    try list.append(42);
+    try std.testing.expectEqual(@as(i32, 42), list.pop());
+}
+
+// http.zig library basic REST -> JSON-RPC request
+// response to the comments in the Varnish Discord
+// work on EPF project proposal
+// http/1.1 is fine because there are no other links to discover.
+//    - https://www.digitalocean.com/community/tutorials/http-1-1-vs-http-2-what-s-the-difference
+//      mentions that http/2 vs http/1.1 was that with 1.1 any other resources required to
+//      completed the downloaded page (e.g. images, video etc) are given as links and not inline
+//      content so further requests have to be made but in the rest wrappers case it's _just_ an
+//      api so there will be no other images, videos etc thus http/1.1 is fine.
+//    - also mention no http/2 because of the downgrade attacks mentioned in: https://richiejp.com/barely-http2-zig
+//      but competent administrators can deploy if they wish behind a proxy downgrading to http/1.1

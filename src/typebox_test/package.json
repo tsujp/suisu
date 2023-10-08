@@ -1,0 +1,19 @@
+{
+  "name": "suisu_mvp",
+  "version": "1.0.0",
+  "description": "bar",
+  "type": "module",
+  "scripts": {
+    "dev": "bun test --watch"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.31.15"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.5",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.1.6"
+  }
+}
