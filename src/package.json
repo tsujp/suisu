@@ -1,0 +1,22 @@
+{
+  "name": "ethereum_rest_api_wrapper",
+  "version": "0.1.0",
+  "description": "TODO",
+  "type": "module",
+  "scripts": {
+    "dev": "bun test --watch"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.31.15",
+    "@stricjs/router": "^4.2.9",
+    "fast-json-stringify": "^5.8.0",
+    "viem": "^1.10.12"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.5",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.1.6"
+  }
+}
