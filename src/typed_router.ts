@@ -44,26 +44,22 @@ export class TypedRouter {
       // this.router = new Router()
       this.record = []
 
-      // Dynamically add HTTP verbs to concrete object (so they can be actually
-      //   called). Essentially there's an interface with a type API specified
-      //   above `TypedRoutes` but here is where that is actually _runtime
-      //   created_.
+      // Dynamically add HTTP-verbs methods to concrete object (so they can be
+      //   called). There's an interface with a type API specified `TypedRoutes`
+      //   but here is where that is actually _runtime created_.
       const methods = methodsLower.reduce((acc, cur) => {
-         // TypeScript, for all its complexity, cannot even assert that a function
-         //   is called with required parameters. Fucking lol. Yes, yes I know
-         //   ONE of the reasons is because JavaScript can and does accept
-         //   partially applied function parameters when invoking a function but
-         //   what if we REQUIRE them for correct runtime behaviour? Oh well.
+         // TypeScript cannot assert that a function is _defined_ with required
+         //   parameters as per it's type definition so be careful editing here.
          acc[cur] = (path, paramsSchema, handler) => {
             // TODO: Even better would be to globally cache it or something but that's
             //       a micro optimisation.
             // Methods are pre-compiled so this is only done once.
             const CDT = TypeCompiler.Compile(Type.Object(paramsSchema))
 
-            // Encased handler is invoked at runtime upon each request at its defined
+            // Encased handler is invoked at runtime upon each request to its
             //   route. If any request slugs/query-values/body-content fails to
             //   validate a default error response is returned, otherwise the
-            //   programmer-provided handler is invoked at which point said request
+            //   provided inner handler is invoked at which point said request
             //   types are guaranteed to be correct.
             const encasedHandler: Handler<typeof path> = (ctx, ser) => {
                const paramsConverted = Value.Convert(
