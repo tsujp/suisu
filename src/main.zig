@@ -29,10 +29,54 @@ pub fn main() !void {
     try server.listen();
 }
 
+// const uri = std.Uri.parse("https://mainnet.infura.io/v3/e9e4d77cf4614a3ea8226e934e97d178") catch unreachable;
+const uri = std.Uri.parse("https://mainnet.infura.io/v3/e9e4d77cf4614a3ea8226e934e97d178") catch unreachable;
 fn getUser(req: *httpz.Request, res: *httpz.Response) !void {
     // Status code 200 is implicit.
 
-    try res.json(.{ .id = req.param("id").?, .name = "Ted" }, .{});
+    // Pretend this function is `getNet` (rename stuff later).
+    // Want to issue 3 seperate RPC requests for:
+    // net_listening ; net_peerCount ; net_version
+    // Want to do a chunked response so the client has immediate access to data as it comes in
+    //   since this request is effectively a JOIN on different backend RPC methods.
+
+    // Using req.arena (std.mem.Allocator) which allows us to allocate memory that only exists for the lifetime
+    //   of this request (since Httpz handles the deinit no `defer` here).
+    var client: std.http.Client = .{ .allocator = req.arena };
+    var headers: std.http.Headers = .{ .allocator = req.arena };
+    try headers.append("Content-Type", "application/json");
+
+    // Ditto no `defer` since `req.arena`.
+    var backend_req = try client.request(.POST, uri, headers, .{});
+
+    try backend_req.start();
+
+    // To POST data we write data into the request. This also requires us setting the request content length. If
+    //   we don't know the content length we can specify chunked encoding.
+    backend_req.transfer_encoding = .chunked;
+
+    // POST body.
+    try backend_req.writer().writeAll(
+        \\{"jsonrpc":"2.0","method":"net_peerCount","params": [],"id":1}
+    );
+
+    // Send final (empty) chunk so upstream server knows we're done sending.
+    try backend_req.finish();
+
+    // Wait for upstream server response.
+    try backend_req.wait();
+
+    // `backend_req.response.status == .ok`
+
+    // curl https://mainnet.infura.io/v3/YOUR-API-KEY \
+    //   -X POST \
+    //   -H "Content-Type: application/json" \
+    //   -d '{"jsonrpc":"2.0","method":"net_peerCount","params": [],"id":1}'
+    try res.json(.{ .backend_status = backend_req.response.status, .foo = "Bar" }, .{});
+
+    // Original line from tutorial.
+    // try res.json(.{ .id = req.param("id").?, .name = "Ted" }, .{});
+
 }
 
 fn notFound(_: *httpz.Request, res: *httpz.Response) !void {
