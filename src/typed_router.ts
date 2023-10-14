@@ -1,109 +1,125 @@
-import { Static, TObject, TPickProperties, TProperties, Type } from '@sinclair/typebox'
-import { TypeCompiler } from '@sinclair/typebox/compiler'
+import { type Static, type TObject, type TProperties, type TSchema, Type } from '@sinclair/typebox'
+import { TypeCheck, TypeCompiler } from '@sinclair/typebox/compiler'
 import { Value } from '@sinclair/typebox/value'
-import { Handler, Params, Router } from '@stricjs/router'
+import { createRouter } from 'radix3'
 
-// TODO: Maybe this can be a macro.
+export type TypedRouter = ReturnType<typeof typedRouter>
+
+type ToLower<T extends readonly string[]> = { [K in keyof T]: Lowercase<T[K]> }
+
 const methodsUpper = ['GET', 'POST', 'PUT', 'DELETE'] as const
 const methodsLower = methodsUpper.map((v) => v.toLowerCase()) as unknown as ToLower<
    typeof methodsUpper
 >
-// END TODO
-
-type ToLower<T extends readonly string[]> = { [K in keyof T]: Lowercase<T[K]> }
 
 type HttpMethods = typeof methodsLower[number]
 
+// Creates a string union of route path segments. Effectively splitting at each
+//   `/` where each split is a member of the union. `/`s are removed.type TakeSegments<P extends string> =
+	P extends `/${infer Path}`
+		? Path extends `${infer Segment}/${infer Rest}`
+			? Segment | TakeSegments<`/${Rest}`>
+			: Path
+		: never
+
+type TakeSlug<P extends string> =
+	P extends `{${infer Slug}}`
+		? Slug
+		: never
+
+type Slugs<P extends string> = TakeSlug<TakeSegments<P>>
+
+type InferAndReplace<T, U> = never extends T ? U : T
+
+type PathStart = `/${string}`
+
 type TypedRoutes = {
-   [M in HttpMethods]: <
-      Path extends string,
-      // ParamsSchema extends Ensure<TProperties>,
-      ParamsSchema extends TProperties,
-      Schema = Static<TObject<ParamsSchema>>,
-      ParamsKeys = Params<Path>,
-   >(
-      path: Path,
-      params: TPickProperties<
-         ParamsSchema,
-         keyof Exclude<ParamsKeys, ParamsKeys & keyof Schema>
-      >,
-      handler: (ctx: Schema, ser: string) => Response,
-   ) => TypedRoutes
+	[M in HttpMethods]: <
+		Path extends PathStart,
+		Validation extends TProperties,
+	>(
+		path: Path,
+		validation: InferAndReplace<Validation, Record<Slugs<Path>, TSchema>>,
+    handler: (ctx: {
+    params: Static<NonNullable<TObject<Validation>>>,
+         request?: Request
+      }) => Response
+ // TODO: Have it return a typed router for chained routes?
+	) => void
 }
 
-type IndexedTypeRoutes = { [K in keyof TypedRoutes]: TypedRoutes[K] }
+type RequestValidationHandler = (
+   request: Request,
+   params: Record<string, string> | undefined
+) => void
 
-export interface TypedRouter extends TypedRoutes {}
+type RouteLookup = {
+   proc: RequestValidationHandler
+}
 
-export class TypedRouter {
-   // private router: Router
-   // TODO: type this
-   record: any[][]
+// TODO: Type the return for route lookup to the ENCASED handler.
 
-   constructor () {
-      // this.router = new Router()
-      this.record = []
+// Our slugs are of the form `/foo/{bar}/baz` where `{bar}` is a slug. Radix3
+//   expects the form `/foo/:bar/baz` where `:bar` is a slug. This does the
+//   conversion for the entire path.
+function toRadix3Slug(path: string) {
+   return path.replaceAll(/{(\w+)}/g, ':$1')
+}
 
-      // Dynamically add HTTP-verbs methods to concrete object (so they can be
-      //   called). There's an interface with a type API specified `TypedRoutes`
-      //   but here is where that is actually _runtime created_.
-      const methods = methodsLower.reduce((acc, cur) => {
-         // TypeScript cannot assert that a function is _defined_ with required
-         //   parameters as per it's type definition so be careful editing here.
-         acc[cur] = (path, paramsSchema, handler) => {
-            // TODO: Even better would be to globally cache it or something but that's
-            //       a micro optimisation.
-            // Methods are pre-compiled so this is only done once.
-            const CDT = TypeCompiler.Compile(Type.Object(paramsSchema))
+function validatedParams<ParamsSchema>(cdt: TypeCheck<TObject>, params: unknown): params is ParamsSchema {
+   if (cdt.Check(params)) {
+      return true
+   } else {
+      return false
+   }
+}
 
-            // Encased handler is invoked at runtime upon each request to its
-            //   route. If any request slugs/query-values/body-content fails to
-            //   validate a default error response is returned, otherwise the
-            //   provided inner handler is invoked at which point said request
-            //   types are guaranteed to be correct.
-            const encasedHandler: Handler<typeof path> = (ctx, ser) => {
-               const paramsConverted = Value.Convert(
-                  Type.Object(paramsSchema),
-                  ctx.params,
-               )
+export function typedRouter() {
+   // `createRouter` generic specifies return type of `rdx.lookup`.
+   const rdx = createRouter<RouteLookup>()
 
-               if (CDT.Check(paramsConverted)) {
-                  // Passed, set converted params and call handler.
-                  // TODO: Types
-                  ctx.params = paramsConverted
-                  return handler(ctx, ser)
-               } else {
-                  // TODO: Better response formats both HTML and JSON similarly to how
-                  //       we respond to valid requests.
-                  console.log(Array.from(CDT.Errors(paramsConverted)))
-                  return new Response(
-                     JSON.stringify([
-                        { reason: 'MALFORMED REQUEST' },
-                        ...CDT.Errors(paramsConverted),
-                     ]),
-                     {
-                        status: 400,
-                        headers: {
-                           'content-type': 'application/json',
-                        },
-                     },
-                  )
-               }
+   const routes = methodsLower.reduce((methods, m) => {
+      // Immediate outer-function defined here is executed only once (useful for
+      //   TypeBox type JIT compilation).
+      // TODO: Cache ^^
+      methods[m] = (path, validationSchema, handler) => {
+         console.log('Adding route')
+
+         const tbValidation = Type.Object(validationSchema)
+         const CDT = TypeCompiler.Compile(tbValidation)
+
+         // This function's scope is executed at runtime per request.
+         const requestValidationHandler: RequestValidationHandler = (request, params) => {
+            console.log('doing a foo', params)
+            const paramsConverted = Value.Convert(tbValidation, params)
+            console.log(paramsConverted)
+
+            if (validatedParams<Parameters<typeof handler>[0]['params']>(CDT, paramsConverted)) {
+               const handlerContext = {
+                  params: paramsConverted,
+                  request
+               } as const
+
+               return handler(handlerContext)
+            } else {
+               // TODO: Proper error response
+               return new Response('yeah not good enough hey mate')
             }
-
-            this.record.push([cur, path, encasedHandler])
-            return this
          }
 
-         return acc
-      }, <IndexedTypeRoutes>{})
-
-      Object.assign(this, methods)
-   }
-
-   plugin (app: Router) {
-      for (const item of this.record) {
-         app[item[0]](...item.slice(1))
+         // `rdx.lookup` strictly returns an object with parameterised values
+         //   (slugs), so assigning a handle to a key when adding the route
+         //   means it wont be erased when returned.
+         rdx.insert(`/${m.toUpperCase()}${toRadix3Slug(path)}`, { proc: requestValidationHandler })
       }
+
+      return methods
+   }, <TypedRoutes>{})
+
+   const match = (path: PathStart) => rdx.lookup(path)
+
+   return {
+      ...routes,
+      match: match,
    }
 }

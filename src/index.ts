@@ -1,33 +1,33 @@
 import { Type } from '@sinclair/typebox'
-import { Router } from '@stricjs/router'
-import { TypedRouter } from './typed_router'
-import { ApiType } from './u256.ts'
+import { typedRouter } from './typed_router'
+import { fetchHandler } from './fetch_handler'
 
-// TODO: Make these both just one call.
-const base = new Router()
-const app = new TypedRouter()
+const foo = typedRouter()
 
-// Client response type.
-const GetNetType = Type.Object({
-   peers: Type.Integer(),
-   chain: ApiType.U256(),
-   listening: Type.Boolean(),
-})
+foo.get(
+	'/foo/{bar}/lorem/{ipsum}/{dolor}',
+	{
+		bar: Type.Integer(),
+		ipsum: Type.Optional(Type.String()),
+		dolor: Type.Boolean(),
+		// extra: Type.String(),
+	},
+	(ctx) => {
+		console.log('ctx:\n', ctx)
+		ctx.params
+		ctx.params.bar
+		const abc = ctx.params.ipsum ?? 'foo'
+		ctx.params.dolor
 
-// Upstream proxy type(s).
-// N/A right now.
+		console.log('hello from handler')
+		return new Response('Foo bar')
+	},
+)
 
-const jsonHeader = {
-   headers: { 'Content-Type': 'application/json' },
-}
+// const h = foo.match('/get/foo/12345/lorem/TWO_STRING/false')
+// // const h = foo.match('/get/blah')
+// console.log('lookup', h)
 
-app.get('/foo/:id', {
-   id: Type.Integer(),
-}, (ctx, ser) => {
-   // At this point `params.id` is guaranteed to be an integer.
-   return new Response('why howdy there')
-})
+const fch = fetchHandler(foo)
 
-base.plug(app)
-
-export default base
+export default fch
