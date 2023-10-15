@@ -15,7 +15,8 @@ const methodsLower = methodsUpper.map((v) => v.toLowerCase()) as unknown as ToLo
 type HttpMethods = typeof methodsLower[number]
 
 // Creates a string union of route path segments. Effectively splitting at each
-//   `/` where each split is a member of the union. `/`s are removed.type TakeSegments<P extends string> =
+//   `/` where each split is a member of the union. `/`s are removed.
+type TakeSegments<P extends string> =
 	P extends `/${infer Path}`
 		? Path extends `${infer Segment}/${infer Rest}`
 			? Segment | TakeSegments<`/${Rest}`>
