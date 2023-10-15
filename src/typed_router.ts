@@ -16,17 +16,13 @@ type HttpMethods = typeof methodsLower[number]
 
 // Creates a string union of route path segments. Effectively splitting at each
 //   `/` where each split is a member of the union. `/`s are removed.
-type TakeSegments<P extends string> =
-	P extends `/${infer Path}`
-		? Path extends `${infer Segment}/${infer Rest}`
-			? Segment | TakeSegments<`/${Rest}`>
-			: Path
-		: never
+type TakeSegments<P extends string> = P extends `/${infer Path}`
+   ? Path extends `${infer Segment}/${infer Rest}`
+      ? Segment | TakeSegments<`/${Rest}`>
+   : Path
+   : never
 
-type TakeSlug<P extends string> =
-	P extends `{${infer Slug}}`
-		? Slug
-		: never
+type TakeSlug<P extends string> = P extends `{${infer Slug}}` ? Slug : never
 
 type Slugs<P extends string> = TakeSlug<TakeSegments<P>>
 
@@ -35,39 +31,39 @@ type InferAndReplace<T, U> = never extends T ? U : T
 type PathStart = `/${string}`
 
 type TypedRoutes = {
-	[M in HttpMethods]: <
-		Path extends PathStart,
-		Validation extends TProperties,
-	>(
-		path: Path,
-		validation: InferAndReplace<Validation, Record<Slugs<Path>, TSchema>>,
-    handler: (ctx: {
-    params: Static<NonNullable<TObject<Validation>>>,
-         request?: Request
-      }) => Response
- // TODO: Have it return a typed router for chained routes?
-	) => void
+   [M in HttpMethods]: <Path extends PathStart, Validation extends TProperties>(
+      path: Path,
+      validation: InferAndReplace<Validation, Record<Slugs<Path>, TSchema>>,
+      handler: (
+         ctx: {
+            params: Static<NonNullable<TObject<Validation>>>
+            request?: Request
+         },
+      ) => Response,
+      // TODO: Have it return a typed router for chained routes?
+   ) => void
 }
 
 type RequestValidationHandler = (
    request: Request,
-   params: Record<string, string> | undefined
+   params: Record<string, string> | undefined,
 ) => void
 
-type RouteLookup = {
-   proc: RequestValidationHandler
-}
+type RouteLookup = { proc: RequestValidationHandler }
 
 // TODO: Type the return for route lookup to the ENCASED handler.
 
 // Our slugs are of the form `/foo/{bar}/baz` where `{bar}` is a slug. Radix3
 //   expects the form `/foo/:bar/baz` where `:bar` is a slug. This does the
 //   conversion for the entire path.
-function toRadix3Slug(path: string) {
+function toRadix3Slug (path: string) {
    return path.replaceAll(/{(\w+)}/g, ':$1')
 }
 
-function validatedParams<ParamsSchema>(cdt: TypeCheck<TObject>, params: unknown): params is ParamsSchema {
+function validatedParams<ParamsSchema> (
+   cdt: TypeCheck<TObject>,
+   params: unknown,
+): params is ParamsSchema {
    if (cdt.Check(params)) {
       return true
    } else {
@@ -75,7 +71,7 @@ function validatedParams<ParamsSchema>(cdt: TypeCheck<TObject>, params: unknown)
    }
 }
 
-export function typedRouter() {
+export function typedRouter () {
    // `createRouter` generic specifies return type of `rdx.lookup`.
    const rdx = createRouter<RouteLookup>()
 
@@ -90,15 +86,23 @@ export function typedRouter() {
          const CDT = TypeCompiler.Compile(tbValidation)
 
          // This function's scope is executed at runtime per request.
-         const requestValidationHandler: RequestValidationHandler = (request, params) => {
+         const requestValidationHandler: RequestValidationHandler = (
+            request,
+            params,
+         ) => {
             console.log('doing a foo', params)
             const paramsConverted = Value.Convert(tbValidation, params)
             console.log(paramsConverted)
 
-            if (validatedParams<Parameters<typeof handler>[0]['params']>(CDT, paramsConverted)) {
+            if (
+               validatedParams<Parameters<typeof handler>[0]['params']>(
+                  CDT,
+                  paramsConverted,
+               )
+            ) {
                const handlerContext = {
                   params: paramsConverted,
-                  request
+                  request,
                } as const
 
                return handler(handlerContext)
@@ -111,7 +115,9 @@ export function typedRouter() {
          // `rdx.lookup` strictly returns an object with parameterised values
          //   (slugs), so assigning a handle to a key when adding the route
          //   means it wont be erased when returned.
-         rdx.insert(`/${m.toUpperCase()}${toRadix3Slug(path)}`, { proc: requestValidationHandler })
+         rdx.insert(`/${m.toUpperCase()}${toRadix3Slug(path)}`, {
+            proc: requestValidationHandler,
+         })
       }
 
       return methods
