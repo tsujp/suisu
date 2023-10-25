@@ -1,7 +1,8 @@
 import { type Static, type TObject, type TProperties, type TSchema, Type } from '@sinclair/typebox'
 import { TypeCheck, TypeCompiler } from '@sinclair/typebox/compiler'
 import { Value } from '@sinclair/typebox/value'
-import { createRouter } from 'radix3'
+import { createRouter, toRouteMatcher } from 'radix3'
+import { createRouteSchema } from './openapi_gen'
 
 export type TypedRouter = ReturnType<typeof typedRouter>
 
@@ -71,17 +72,45 @@ function validatedParams<ParamsSchema> (
    }
 }
 
+// function extractPathSlugs (path: string) {
+// }
+
+function assertTypedSlugs (path:string, schema: {}) {
+   const pathSlugs = [...path.matchAll(/{(\w+)}/g)].map((e) => e[1])
+   const schemaKeys = Object.keys(schema)
+
+   console.log('path slugs', pathSlugs)
+   console.log('schema keys', schemaKeys)
+
+   if (pathSlugs.length != schemaKeys.length) {
+      // TODO: Proper 'compiler' style error
+      console.log('ERROR: path slugs and schema key length mismatch')
+      return false
+   }
+
+   const allPresent = pathSlugs.every((cur) => Object.hasOwn(schema, cur))
+   console.log('all present', allPresent)
+}
+
 export function typedRouter () {
    // `createRouter` generic specifies return type of `rdx.lookup`.
    const rdx = createRouter<RouteLookup>()
+
+   const wtf = toRouteMatcher(rdx)
 
    const routes = methodsLower.reduce((methods, m) => {
       // Immediate outer-function defined here is executed only once (useful for
       //   TypeBox type JIT compilation).
       // TODO: Cache ^^
+      // TODO: Given distributed route definition in source code (i.e. different
+      //       files) add a _warning_ here when it sees a route with the same
+      //       path and method being defined as this will help guard against
+      //       accidentally redefining a route which shouldn't happen.
+      // TODO: Add grouping for things like v1, v2, v3 etc.
       methods[m] = (path, validationSchema, handler) => {
          console.log('Adding route')
 
+         // assertTypedSlugs(path, validationSchema)
          const tbValidation = Type.Object(validationSchema)
          const CDT = TypeCompiler.Compile(tbValidation)
 
@@ -112,12 +141,16 @@ export function typedRouter () {
             }
          }
 
+         // Create OpenAPI schema for this route.
+         createRouteSchema(m, path, tbValidation, handler)
+
          // `rdx.lookup` strictly returns an object with parameterised values
          //   (slugs), so assigning a handle to a key when adding the route
          //   means it wont be erased when returned.
          rdx.insert(`/${m.toUpperCase()}${toRadix3Slug(path)}`, {
             proc: requestValidationHandler,
          })
+         // console.log('ctx', toRouteMatcher(rdx).ctx.table)
       }
 
       return methods
@@ -128,5 +161,18 @@ export function typedRouter () {
    return {
       ...routes,
       match: match,
+      // foo: rdx,
    }
 }
+
+// TOOD: This is the end-game API here, but will do for now. Ideally merge two
+//       radix trees into one such that API routes in other files (to save
+//       having a single giga-file) can be imported and added to the router
+//       in index.ts which is the central (and thus easy to understand)
+//       location for route definition. However, besides implementing the
+//       merging of the trees im not sure if this is the best approach as
+//       you wouldn't be able to see the route anyway and it's effectively
+//       a layer of indirection. This way the whole application shares a single
+//       router (this isn't meant to be super general purpose but specific to
+//       defining and implementing reference REST APIs so...).
+export const router = typedRouter()

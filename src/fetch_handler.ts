@@ -9,7 +9,7 @@ export function fetchHandler (router: TypedRouter) {
          const h = router.match(route)
 
          // TODO: Proper 404.
-         return h?.proc(req, h.params) ?? new Response('404 not found')
+         return h?.proc(req, h.params ?? {}) ?? new Response('404 not found')
       },
    }
 
