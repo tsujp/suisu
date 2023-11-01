@@ -1,8 +1,8 @@
-import { type Static, type TObject, type TProperties, type TSchema, Type } from '@sinclair/typebox'
+import { type Static, type TObject, type TProperties, type TSchema, Type, TNot, TOptional, TString, TExclude, TRequired, ReadonlyUnwrapType, Optional, AssertType, Assert, IntersectType, TKind, TAnySchema, UnionToIntersect, UnionType, UnionResolve, TKeyOf, DecodeType, StaticDecode, TBoolean, TInteger } from '@sinclair/typebox'
 import { TypeCheck, TypeCompiler } from '@sinclair/typebox/compiler'
 import { Value } from '@sinclair/typebox/value'
 import { createRouter, toRouteMatcher } from 'radix3'
-import { createRouteSchema } from './openapi_gen'
+import { spec, createRouteSchema } from './openapi_gen'
 
 export type TypedRouter = ReturnType<typeof typedRouter>
 
@@ -13,7 +13,7 @@ const methodsLower = methodsUpper.map((v) => v.toLowerCase()) as unknown as ToLo
    typeof methodsUpper
 >
 
-type HttpMethods = typeof methodsLower[number]
+export type HttpMethods = typeof methodsLower[number]
 
 // Creates a string union of route path segments. Effectively splitting at each
 //   `/` where each split is a member of the union. `/`s are removed.
@@ -31,13 +31,38 @@ type InferAndReplace<T, U> = never extends T ? U : T
 
 type PathStart = `/${string}`
 
+type AllowedTypes = 
+   | TString
+   | TBoolean
+   | TInteger
+
+export type BaseApiDescription = {
+   docs: {
+      title: string,
+      desc: string
+   }
+}
+
+type ParamApiDescription<Schema> = {
+   params: Schema
+} & BaseApiDescription
+
+
+// TODO: Path parameters are not allowed to be optional as per OpenAPI spec, enforce that here on the `params` object; hard and afraid of another 50 hours of TypeScript golfing.
 type TypedRoutes = {
-   [M in HttpMethods]: <Path extends PathStart, Validation extends TProperties>(
+   [M in HttpMethods]: <
+      Path extends PathStart,
+      Validation extends TProperties,
+   >(
       path: Path,
-      validation: InferAndReplace<Validation, Record<Slugs<Path>, TSchema>>,
+      // If slugs are present then so must be the params key with said slugs types.
+      api: [Slugs<Path>] extends [never]
+         ? BaseApiDescription
+         : ParamApiDescription<InferAndReplace<Validation, Record<Slugs<Path>, AllowedTypes>>>,
       handler: (
          ctx: {
-            params: Static<NonNullable<TObject<Validation>>>
+            // If there are no slugs params is empty (and not TProperties' default).
+            params: [Slugs<Path>] extends [never] ? null : Static<NonNullable<TObject<Validation>>>
             request?: Request
          },
       ) => Response,
@@ -45,11 +70,14 @@ type TypedRoutes = {
    ) => void
 }
 
+// Runtime executed request validation function. Executes before user-provided
+//   `handler` (from TypedRoutes).
 type RequestValidationHandler = (
    request: Request,
    params: Record<string, string> | undefined,
 ) => void
 
+// Return type of `radix3.lookup`.
 type RouteLookup = { proc: RequestValidationHandler }
 
 // TODO: Type the return for route lookup to the ENCASED handler.
@@ -72,8 +100,6 @@ function validatedParams<ParamsSchema> (
    }
 }
 
-// function extractPathSlugs (path: string) {
-// }
 
 function assertTypedSlugs (path:string, schema: {}) {
    const pathSlugs = [...path.matchAll(/{(\w+)}/g)].map((e) => e[1])
@@ -107,11 +133,19 @@ export function typedRouter () {
       //       path and method being defined as this will help guard against
       //       accidentally redefining a route which shouldn't happen.
       // TODO: Add grouping for things like v1, v2, v3 etc.
-      methods[m] = (path, validationSchema, handler) => {
+      
+      methods[m] = (path, rawApiSchema, handler) => {
          console.log('Adding route')
 
-         // assertTypedSlugs(path, validationSchema)
-         const tbValidation = Type.Object(validationSchema)
+         // Normalise API schema, if the input schema has a `params` key that
+         //   will overwrite the default `{ params: {} }` we're setting here
+         //   since `params` is only required if the URL has slugs for DX.
+         const apiSchema = Object.assign({ params: {} }, rawApiSchema)
+
+         // TODO: Print proper error message in assertTypedSlugs.
+         // assertTypedSlugs(path, validationSchema?.params ?? {})
+         assertTypedSlugs(path, apiSchema.params)
+         const tbValidation = Type.Object(apiSchema.params)
          const CDT = TypeCompiler.Compile(tbValidation)
 
          // This function's scope is executed at runtime per request.
@@ -119,9 +153,9 @@ export function typedRouter () {
             request,
             params,
          ) => {
-            console.log('doing a foo', params)
+            console.log('Input params:', params)
             const paramsConverted = Value.Convert(tbValidation, params)
-            console.log(paramsConverted)
+            console.log('TypeBox converted:', paramsConverted)
 
             if (
                validatedParams<Parameters<typeof handler>[0]['params']>(
@@ -142,7 +176,7 @@ export function typedRouter () {
          }
 
          // Create OpenAPI schema for this route.
-         createRouteSchema(m, path, tbValidation, handler)
+         createRouteSchema(m, path, tbValidation, apiSchema.docs)//handler)
 
          // `rdx.lookup` strictly returns an object with parameterised values
          //   (slugs), so assigning a handle to a key when adding the route
@@ -161,11 +195,12 @@ export function typedRouter () {
    return {
       ...routes,
       match: match,
-      // foo: rdx,
+      spec: spec,
    }
 }
 
-// TOOD: This is the end-game API here, but will do for now. Ideally merge two
+// `sstur/nbit` has a nice parallel to multi-file routing: https://github.com/sstur/nbit?tab=readme-ov-file#splitting-routes-into-multiple-files
+// TODO: This is the end-game API here, but will do for now. Ideally merge two
 //       radix trees into one such that API routes in other files (to save
 //       having a single giga-file) can be imported and added to the router
 //       in index.ts which is the central (and thus easy to understand)
