@@ -28,15 +28,15 @@ const op: OperationObject = {
   summary: docs.title,
   description: docs.desc,
   parameters: Object.entries(schema.properties).map(([param, schema]) => ({
-			name: param.name,
-			in: 'path',
-			required: true, // Path parameters cannot be optional.
-			description: param.desc,
-			schema: Type.Strict(schema)
-		}))
-	// Similarly for query parameters...
-	// Similarly for request bodies...
-	// Similarly for responses...
+    name: param.name,
+    in: 'path',
+    required: true, // Path parameters cannot be optional.
+    description: param.desc,
+    schema: Type.Strict(schema)
+  }))
+  // Similarly for query parameters...
+  // Similarly for request bodies...
+  // Similarly for responses...
 }
 ```
 
