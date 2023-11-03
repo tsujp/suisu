@@ -5,7 +5,7 @@ date: 2023-10-10 00:10:00
 keywords: [epf, dev_update, blog]
 ---
 
-[comment]: # (2023-09-18 to 2023-10-10)
+[comment]: # (2023-09-18 to 2023-10-01)
 
 # EPF Update -- Weeks 11, and 12 (Jordan Ellis Coppard)
 
