@@ -1,8 +1,9 @@
-import { type Static, type TObject, type TProperties, type TSchema, Type, TNot, TOptional, TString, TExclude, TRequired, ReadonlyUnwrapType, Optional, AssertType, Assert, IntersectType, TKind, TAnySchema, UnionToIntersect, UnionType, UnionResolve, TKeyOf, DecodeType, StaticDecode, TBoolean, TInteger } from '@sinclair/typebox'
+import { type Static, type TObject, type TProperties, Type, type TString, type TBoolean, type TInteger, type TLiteral, type TUnion } from '@sinclair/typebox'
 import { TypeCheck, TypeCompiler } from '@sinclair/typebox/compiler'
 import { Value } from '@sinclair/typebox/value'
 import { createRouter, toRouteMatcher } from 'radix3'
 import { spec, createRouteSchema } from './openapi_gen'
+import { HttpStatusCodes } from './http_status_codes_const'
 
 export type TypedRouter = ReturnType<typeof typedRouter>
 
@@ -35,38 +36,52 @@ type AllowedTypes =
    | TString
    | TBoolean
    | TInteger
+   | TLiteral
+   | TUnion
 
-export type BaseApiDescription = {
+type ExplicitResponse = {
+   [K in keyof typeof HttpStatusCodes as typeof HttpStatusCodes[K]]?: TProperties
+}
+
+// type BaseApiDescription<Schema, Response extends ExplicitResponse> = {
+//    response: Response,
+//    docs: {
+//       title: string,
+//       desc: string
+//    } & { [K in keyof Schema]: string }
+// }
+
+// export type ParamApiDescription<Schema, Response extends ExplicitResponse> = {
+//    params: Schema
+// } & BaseApiDescription<Schema, Response>
+
+type ApiSpec<Slugs, Schema, Resp> = {
+   response: Resp,
    docs: {
       title: string,
       desc: string
-   }
+   } & { [K in keyof Schema]: string }
+} & {
+   [K in [Slugs] extends [never] ? never : 'params']: Schema
 }
-
-type ParamApiDescription<Schema> = {
-   params: Schema
-} & BaseApiDescription
-
 
 // TODO: Path parameters are not allowed to be optional as per OpenAPI spec, enforce that here on the `params` object; hard and afraid of another 50 hours of TypeScript golfing.
 type TypedRoutes = {
    [M in HttpMethods]: <
       Path extends PathStart,
       Validation extends TProperties,
+      Response extends ExplicitResponse,
    >(
       path: Path,
-      // If slugs are present then so must be the params key with said slugs types.
-      api: [Slugs<Path>] extends [never]
-         ? BaseApiDescription
-         : ParamApiDescription<InferAndReplace<Validation, Record<Slugs<Path>, AllowedTypes>>>,
+      api: ApiSpec<Slugs<Path>, InferAndReplace<Validation, Record<Slugs<Path>, AllowedTypes>>, Response>,
       handler: (
          ctx: {
             // If there are no slugs params is empty (and not TProperties' default).
             params: [Slugs<Path>] extends [never] ? null : Static<NonNullable<TObject<Validation>>>
-            request?: Request
-         },
-      ) => Response,
-      // TODO: Have it return a typed router for chained routes?
+            request?: Request,
+         }
+      ) => { [StatusCode in keyof Response]?: Response[StatusCode] extends TProperties ? Static<TObject<Response[StatusCode]>> : never }
+   // TODO: Have it return a typed router for chained routes?
    ) => void
 }
 
@@ -118,6 +133,7 @@ function assertTypedSlugs (path:string, schema: {}) {
    console.log('all present', allPresent)
 }
 
+
 export function typedRouter () {
    // `createRouter` generic specifies return type of `rdx.lookup`.
    const rdx = createRouter<RouteLookup>()
@@ -140,8 +156,10 @@ export function typedRouter () {
          // Normalise API schema, if the input schema has a `params` key that
          //   will overwrite the default `{ params: {} }` we're setting here
          //   since `params` is only required if the URL has slugs for DX.
-         const apiSchema = Object.assign({ params: {} }, rawApiSchema)
+         const apiSchema = Object.assign({ params: {}, docs: { params: {} } }, rawApiSchema)
+         // const apiSchema = Object.assign({ params: {} }, rawApiSchema)
 
+         // TODO: Validate params docs too.
          // TODO: Print proper error message in assertTypedSlugs.
          // assertTypedSlugs(path, validationSchema?.params ?? {})
          assertTypedSlugs(path, apiSchema.params)
@@ -168,7 +186,11 @@ export function typedRouter () {
                   request,
                } as const
 
-               return handler(handlerContext)
+               console.log('about to invoke handler')
+               // return handler(handlerContext)
+               const handlerReturn = handler(handlerContext)
+               console.log(handlerReturn)
+               return handlerReturn
             } else {
                // TODO: Proper error response
                return new Response('yeah not good enough hey mate')
@@ -176,6 +198,9 @@ export function typedRouter () {
          }
 
          // Create OpenAPI schema for this route.
+         // XXX: TypeScript narrowing.
+         // const apiSchemaDocs = Object.assign({ params: {} }, rawApiSchema)
+         // createRouteSchema(m, path, tbValidation, apiSchema.docs)//handler)
          createRouteSchema(m, path, tbValidation, apiSchema.docs)//handler)
 
          // `rdx.lookup` strictly returns an object with parameterised values

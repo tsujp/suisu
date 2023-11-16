@@ -1,8 +1,10 @@
 import { type ServeOptions, type UnixServeOptions } from 'bun'
 import { type TypedRouter } from './typed_router'
 
-export function fetchHandler (router: TypedRouter) {
+export function fetchHandler (port: string, hostname: string, router: TypedRouter) {
    const fch: ServeOptions | UnixServeOptions = {
+      port,
+      hostname,
       fetch: (req, ser) => {
          const url = new URL(req.url)
          const route = `/${req.method}${url.pathname}` as const
