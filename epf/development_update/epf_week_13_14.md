@@ -7,7 +7,6 @@ keywords: [epf, dev_update, blog]
 
 [comment]: # (2023-10-02 to 2023-10-15)
 
-
 # EPF Update -- Weeks 13, and 14 (Jordan Ellis Coppard)
 
 With all the TypeBox and serialisation progress (from the last update) done I've now implemented a very simple web framework using a trie-based (radix) router (from a package) which uses that TypeBox information to generate API documentation _and_ runtime value-checking for the reference implementation.
