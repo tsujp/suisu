@@ -1,0 +1,69 @@
+(1) Generate OpenAPI spec for what simple routes currently exist
+(1.5) Render spec for people's visual consumption
+(2) Add basic mocked response RPC data for compile-time testing / more 'basic' tests?
+(3) Once (1) is working use Hive for real testing against various clients
+
+
+
+---
+
+WORKING NOTES FOR (1)
+
+Generate OpenAPI schema when adding routes or at the very end when all routes are defined?
+	- The latter would require me to traverse and interpret how the radix tree represents
+	  these structures. Cannot (quickly) think of a reason why this would be advantageous
+	  and we do not allow re-defining the exact same route (there's no purpose to that)
+	  so as-they're-added looks like the play.
+
+So many frameworks exist for generating a web page from an OpenAPI schema and.. I don't
+really like any of them (in the long term). Scalar seems like the easiest to get started
+with for now and looks reasonably customiseable but it's a lot of client-sided JavaScript
+and ideally the documentation would be maximally HTML with a little sprinkling of JS to
+do things like change a tab if a parameter to a route is `anyOf`. Trying out the requests
+is cool but we have a schema so someone could (still almost trivially easily) load that
+into Insomnia, or Postman etc by giving a URL.
+
+------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
+
+- Very cool is this, hypermedia annotation of JSON Schema: https://json-schema.org/draft-07/draft-handrews-json-schema-hyperschema-00
+- JSON Schema specification links: https://json-schema.org/specification-links
+
+TypeBox supports JSON Schema Draft 7, so that's the target: https://json-schema.org/draft-07/json-schema-release-notes
+- So the schema produced by this reference is .'. JSON Schema Draft 7
+- OpenAPI version targetted is OAS 3.1
+
+- https://github.com/metadevpro/openapi3-ts?tab=readme-ov-file provides functions which are doing what I am already doing manually except someone has already read the full spec. Show the simple `openapi_gen.ts` I had and the example output.
+
+1. Get the Scalar frontend display working with Bun.
+2. Autoreloading all the stuff.
+
+- Generating documentation (existing stuff not amazing, SwaggerUI is decent, mention that one from HN I'll try which is more explorable).
+	- Wrote my own `openapi_gen.ts`: it's pretty basic
+	- Found a nice dependency-less package to use instead because this is the kind of narrow scoped _thing_ suited to yeeting into a dependency
+- Eventually integrate into Ethereum's Hive test suite but for now to prevent another rabbit hole just use Viem as an RPC provider layer.
+- Some example routes actually documented!
+
+------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
+
+### Dungeon
+
+- https://github.com/karlseguin/http.zig
+- https://richiejp.com/barely-http2-zig (mentions those http/2 downgrade attacks)
+- https://richiejp.com/zig-vs-c-mini-http-server (good nuggets of how Zig works)
+- https://www.digitalocean.com/community/tutorials/http-1-1-vs-http-2-what-s-the-difference (mentions http/1.1 multiple requests)
+
+-------
+
+// http.zig library basic REST -> JSON-RPC request
+// response to the comments in the Varnish Discord
+// work on EPF project proposal
+// http/1.1 is fine because there are no other links to discover.
+//    - https://www.digitalocean.com/community/tutorials/http-1-1-vs-http-2-what-s-the-difference
+//      mentions that http/2 vs http/1.1 was that with 1.1 any other resources required to
+//      completed the downloaded page (e.g. images, video etc) are given as links and not inline
+//      content so further requests have to be made but in the rest wrappers case it's _just_ an
+//      api so there will be no other images, videos etc thus http/1.1 is fine.
+//    - also mention no http/2 because of the downgrade attacks mentioned in: https://richiejp.com/barely-http2-zig
+//      but competent administrators can deploy if they wish behind a proxy downgrading to http/1.1
