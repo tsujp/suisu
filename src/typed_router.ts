@@ -4,6 +4,7 @@ import { Value } from '@sinclair/typebox/value'
 import { createRouter, toRouteMatcher } from 'radix3'
 import { spec, createRouteSchema } from './openapi_gen'
 import { HttpStatusCodes } from './http_status_codes_const'
+import fastJson from 'fast-json-stringify'
 
 export type TypedRouter = ReturnType<typeof typedRouter>
 
@@ -13,6 +14,7 @@ const methodsUpper = ['GET', 'POST', 'PUT', 'DELETE'] as const
 const methodsLower = methodsUpper.map((v) => v.toLowerCase()) as unknown as ToLower<
    typeof methodsUpper
 >
+const JSON_HEADER = { 'Content-Type': 'application/json' }
 
 export type HttpMethods = typeof methodsLower[number]
 
@@ -39,29 +41,19 @@ type AllowedTypes =
    | TLiteral
    | TUnion
 
-type ExplicitResponse = {
+export type ExplicitResponse = {
    [K in keyof typeof HttpStatusCodes as typeof HttpStatusCodes[K]]?: TProperties
 }
 
-// type BaseApiDescription<Schema, Response extends ExplicitResponse> = {
-//    response: Response,
-//    docs: {
-//       title: string,
-//       desc: string
-//    } & { [K in keyof Schema]: string }
-// }
-
-// export type ParamApiDescription<Schema, Response extends ExplicitResponse> = {
-//    params: Schema
-// } & BaseApiDescription<Schema, Response>
-
-type ApiSpec<Slugs, Schema, Resp> = {
+export type ApiSpec<Slugs, Schema, Resp> = {
    response: Resp,
    docs: {
       title: string,
       desc: string
+      // Parameter slugs documentation.
    } & { [K in keyof Schema]: string }
 } & {
+   // Parameter slugs typing.
    [K in [Slugs] extends [never] ? never : 'params']: Schema
 }
 
@@ -76,12 +68,11 @@ type TypedRoutes = {
       api: ApiSpec<Slugs<Path>, InferAndReplace<Validation, Record<Slugs<Path>, AllowedTypes>>, Response>,
       handler: (
          ctx: {
-            // If there are no slugs params is empty (and not TProperties' default).
             params: [Slugs<Path>] extends [never] ? null : Static<NonNullable<TObject<Validation>>>
             request?: Request,
          }
-      ) => { [StatusCode in keyof Response]?: Response[StatusCode] extends TProperties ? Static<TObject<Response[StatusCode]>> : never }
-   // TODO: Have it return a typed router for chained routes?
+      ) => Promise<{ [StatusCode in keyof Response]?: Response[StatusCode] extends TProperties ? Static<TObject<Response[StatusCode]>> : never }>
+      // TODO: Have it return a typed router for chained routes?
    ) => void
 }
 
@@ -138,8 +129,6 @@ export function typedRouter () {
    // `createRouter` generic specifies return type of `rdx.lookup`.
    const rdx = createRouter<RouteLookup>()
 
-   const wtf = toRouteMatcher(rdx)
-
    const routes = methodsLower.reduce((methods, m) => {
       // Immediate outer-function defined here is executed only once (useful for
       //   TypeBox type JIT compilation).
@@ -162,12 +151,16 @@ export function typedRouter () {
          // TODO: Validate params docs too.
          // TODO: Print proper error message in assertTypedSlugs.
          // assertTypedSlugs(path, validationSchema?.params ?? {})
+         console.log('api schema object?', apiSchema.response)
          assertTypedSlugs(path, apiSchema.params)
          const tbValidation = Type.Object(apiSchema.params)
          const CDT = TypeCompiler.Compile(tbValidation)
 
-         // This function's scope is executed at runtime per request.
-         const requestValidationHandler: RequestValidationHandler = (
+         // const responseSchemas = Object.entriesapiSchema.response
+         const responseSchemas = Object.fromEntries(Object.entries(apiSchema.response).map(([code, type]) => [code, Type.Object(type)]))
+
+         // This function's scope is executed at runtime per request; closure forming.
+         const requestValidationHandler: RequestValidationHandler = async (
             request,
             params,
          ) => {
@@ -188,9 +181,34 @@ export function typedRouter () {
 
                console.log('about to invoke handler')
                // return handler(handlerContext)
-               const handlerReturn = handler(handlerContext)
+               const handlerReturn = await handler(handlerContext)
                console.log(handlerReturn)
-               return handlerReturn
+               console.log(responseSchemas)
+
+               const __hr = Object.entries(handlerReturn)
+               if (__hr.length !== 1) {
+                  // TODO: Proper error.
+                  console.log(`HANDLER RETURNED ${__hr.length} STATUS CODE OBJECTS`)
+               }
+
+               const returnCode = parseInt(__hr[0][0])
+               const returnData = __hr[0][1]
+               const responseType = responseSchemas[returnCode]
+
+               console.log('blah', returnCode, returnData)
+
+               if (responseType == null) {
+                  // TODO: Proper error.
+                  console.log(`HANDLER DOES NOT HAVE SCHEMA SPECIFIED FOR RESPONSE CODE ${returnCode}`)
+               }
+               
+               // return handlerReturn
+               return new Response(
+                  fastJson(responseType)(returnData),
+                  {
+                     status: returnCode,
+                     headers: JSON_HEADER
+                  })
             } else {
                // TODO: Proper error response
                return new Response('yeah not good enough hey mate')
@@ -201,7 +219,7 @@ export function typedRouter () {
          // XXX: TypeScript narrowing.
          // const apiSchemaDocs = Object.assign({ params: {} }, rawApiSchema)
          // createRouteSchema(m, path, tbValidation, apiSchema.docs)//handler)
-         createRouteSchema(m, path, tbValidation, apiSchema.docs)//handler)
+         createRouteSchema(m, path, tbValidation, apiSchema.docs, responseSchemas)//handler)
 
          // `rdx.lookup` strictly returns an object with parameterised values
          //   (slugs), so assigning a handle to a key when adding the route

@@ -1,36 +1,36 @@
 import { Static, TObject, TProperties, Type } from '@sinclair/typebox'
 import { router } from '../typed_router'
+import { ApiType } from '../u256'
+import { rpc } from '../rpc'
+import { hexToBigInt, hexToNumber  } from 'viem'
+
+// import.meta.env.NODE_ENV
 
 // Encompasses JSON-RPC:
 //    - net_version (does not use this API)
 //    - eth_chainId (what is used instead of net_version)
 //    - net_peerCount
 //    - net_listening
+const GetNetType = {
+  peers: Type.Integer(),
+  chain: ApiType.U256(),
+  listening: Type.Boolean(),
+}
+
 router.get('/info/net', {
   docs: {
    title: 'Basic client network information',
-    desc: 'Returns the current chain ID, whether the client is listening for network connections, and the current number of connected peers.'
+    desc: 'Fetches the current chain ID, whether the client is listening for network connections, and the current number of connected peers.'
  },
  response: {
-   200: {
-    foo: Type.Integer()
-   },
-  100: {
-    bar: Type.String(),
-    boing: Type.Boolean()
-  },
+   201: GetNetType
   }
-}, (ctx) => {
-    const returnData = {
-      foo: 123
-    }
-
-    return {
-      200: returnData,
-      100: {
-        bar: 'a string',
-        boing: false
-        // boing: 'what'
+}, async (ctx) => {
+     return {
+      201: {
+        peers: hexToNumber(await rpc.request({ method: 'net_peerCount' })),
+        chain: hexToBigInt(await rpc.request({ method: 'eth_chainId' })),
+        listening: await rpc.request({ method: 'net_listening' })
       }
     }
 })
@@ -47,14 +47,10 @@ router.get('/info/net', {
 // TODO: Then decide where I am putting the response type info, where it is now
 //       or on the handler itself?
 
-router.get('/info/client/{foo}', {
-  params: {
-    foo: Type.String()
-  },
+router.get('/info/client', {
   docs: {
     title: 'Basic client information',
-    desc: 'Returns the clients version information.',
-    foo: 'bning'
+    desc: 'Returns the clients version information.'
   },
   response: {
     200: {
@@ -64,7 +60,7 @@ router.get('/info/client/{foo}', {
       // extra: Type.String()
       extra: Type.Integer()
     }
-}}, (ctx) => {
+}}, async (ctx) => {
     // Stub response payload
     const responseData = {
       name: 'foo',

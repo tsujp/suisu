@@ -2,7 +2,7 @@
 
 import { Kind, type TObject, Type } from "@sinclair/typebox"
 import { oas31 } from "openapi3-ts"
-import { ParamApiDescription, type BaseApiDescription, type HttpMethods } from "./typed_router"
+import { ExplicitResponse, type ApiSpec, type HttpMethods } from "./typed_router"
 
 // Of dubious value since the spec itself isn't _that_ complex (what we need
 //   thus far), we'll see (referring to the use of a package here).
@@ -13,23 +13,10 @@ export const spec = new oas31.OpenApiBuilder()
 spec.addTitle('Execution REST API')
 spec.addDescription('REST API specification for Ethereum execution layer.')
 
-// Spec: https://spec.openapis.org/oas/v3.1.0
-const SCHEMA = {
-	openapi: '3.0.2',
-	// https://spec.openapis.org/oas/v3.1.0#infoObject
-	info: {
-		title: 'Foo API',
-		summary: 'A summary',
-		description: 'Some description',
-	},
-	// https://spec.openapis.org/oas/v3.1.0#pathsObject
-	paths: {},
-}
-
 // TODO: Get this type from TypedRouter so it's DRY.
 
 // export function createRouteSchema(method: HttpMethods, path: string, schema: TObject, docs: BaseApiDescription['docs']) {
-export function createRouteSchema(method: HttpMethods, path: string, schema: TObject, docs: ParamApiDescription<object>['docs']) {
+export function createRouteSchema(method: HttpMethods, path: string, schema: TObject, docs: ApiSpec<unknown, unknown, unknown>['docs'], response: ExplicitResponse) {
   console.log('createRouteSchema called')
   console.log('docs:', docs)
 
@@ -67,18 +54,27 @@ export function createRouteSchema(method: HttpMethods, path: string, schema: TOb
 				// Path parameters cannot be optional.
 				schema: Type.Strict(schema)
 			})),
-    responses: {
-      200: {
-        description: 'successful operation',
+    responses: Object.fromEntries(Object.entries(response).map(([responseCode, responseSchema]) => [responseCode, {
+        description: 'TODO allow setting this',
         content: {
-         'application/json': {
-            schema: {
-              type: 'string'
+          'application/json': {
+            schema: Type.Strict(responseSchema)
             }
-          } 
         }
-      }
-    }
+      }]
+    ))
+    // responses: {
+    //   200: {
+    //     description: 'successful operation',
+    //     content: {
+    //      'application/json': {
+    //         schema: {
+    //           type: 'string'
+    //         }
+    //       } 
+    //     }
+    //   }
+    // }
   }
 
   spec.addPath(path, {
@@ -88,54 +84,3 @@ export function createRouteSchema(method: HttpMethods, path: string, schema: TOb
   const out = spec.getSpecAsJson(undefined, 2)
   console.log(out)
 }
-
-export function createRouteSchema_v1(method: string, path: string, schema: TObject, handler) {
-	console.log('a', schema.description)
-	console.log('b', schema.properties)
-	console.log('c', schema.required)
-	console.log('method', method)
-	// console.log(JSON.parse(JSON.stringify(schema)))
-	console.log(JSON.stringify(schema))
-
-	SCHEMA.paths[path] = {
-		// https://spec.openapis.org/oas/v3.1.0#operationObject
-		[method]: {
-			summary: 'TODO: Allow passing summary in',
-			description: 'TODO: Allow passing method description in',
-			// TODO: Schemas other than pure path parameters
-			parameters: Object.entries(schema.properties).map(([param, schema]) => ({
-				name: param,
-				in: 'path',
-				required: true,
-				description: 'Bing bong baz',
-				// Path parameters cannot be optional.
-				schema: Type.Strict(schema)
-			})),
-				responses: {
-          200: {
-            description: "successful operation",
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'string'
-                }
-              }
-            }
-          },
-				}
-			// parameters: Object.keys(schema.properties).map((param) => ({
-			// 	name: param,
-			// 	in: 'path',
-			// 	required: true,
-			// 	// Path parameters cannot be optional.
-			// 	schema: 'x'
-			// }))
-		}
-	}
-	// console.log(method, JSON.stringify(schema))
-	console.log('schema is now...')
-	// console.log(SCHEMA, null)
-	console.log(JSON.stringify(SCHEMA, null, 2))
-}
-
-
