@@ -15,11 +15,11 @@ import { mkdir } from 'node:fs/promises'
 const OUTPUT_DIR = 'dist'
 const SPEC_OUTPUT_FILE = 'spec.json'
 
-const API_PORT = Bun.env.SUISU_API_PORT || '3355'
-const API_HOST = Bun.env.SUISU_AI_HOST || 'localhost'
+const API_PORT = import.meta.env.SUISU_API_PORT || '3355'
+const API_HOST = import.meta.env.SUISU_AI_HOST || 'localhost'
 
-const DOC_PORT = Bun.env.SUISU_DOC_PORT || '3366'
-const DOC_HOST = Bun.env.SUISU_DOC_HOST || 'localhost'
+const DOC_PORT = import.meta.env.SUISU_DOC_PORT || '3366'
+const DOC_HOST = import.meta.env.SUISU_DOC_HOST || 'localhost'
 
 // XXX: Ideal API but not for now.
 // import './api/info'
